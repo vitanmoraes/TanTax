@@ -29,6 +29,9 @@ import {
 import { fetchCNPJData, BrasilAPI_CNPJ } from './services/brasilApiService';
 import { calculateTaxEngine, TaxResults } from './services/taxEngine';
 import { mapCnaeToActivity, AppActivity } from './services/cnaeMapper';
+import { useAuth } from './AuthContext';
+import { Login } from './Login';
+import { LogOut } from 'lucide-react';
 
 interface SelectedFile {
   base64: string;
@@ -42,6 +45,7 @@ const MONTH_NAMES = [
 ];
 
 const App: React.FC = () => {
+  const { user, loading, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'analysis' | 'brasilapi' | 'tax-rules' | 'calculation-memory' | 'report'>('analysis');
   const [billingFile, setBillingFile] = useState<SelectedFile | null>(null);
   const [payrollFile, setPayrollFile] = useState<SelectedFile | null>(null);
@@ -325,6 +329,18 @@ const App: React.FC = () => {
     return aggregated;
   }, [simRbt12, simMonthlyBilling, simMonthlyPayroll, simActivity, simIsB2B, totalBilling, totalPayroll, simActivities]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
@@ -371,9 +387,15 @@ const App: React.FC = () => {
               </button>
             </nav>
             <div className="h-8 w-[1px] bg-slate-200 hidden md:block"></div>
-            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">V2.2 PDF AI</span>
+            <button
+              onClick={() => signOut()}
+              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              title="Sair"
+            >
+              <LogOut size={20} />
+            </button>
             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold border border-indigo-200">
-              A
+              {user.email?.[0].toUpperCase()}
             </div>
           </div>
         </div>
