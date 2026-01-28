@@ -46,7 +46,7 @@ const MONTH_NAMES = [
 
 const App: React.FC = () => {
   const { user, loading, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'analysis' | 'brasilapi' | 'tax-rules' | 'calculation-memory' | 'report'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'brasilapi' | 'tax-rules' | 'payroll-reflection' | 'calculation-memory' | 'report'>('analysis');
   const [billingFile, setBillingFile] = useState<SelectedFile | null>(null);
   const [payrollFile, setPayrollFile] = useState<SelectedFile | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -69,6 +69,8 @@ const App: React.FC = () => {
   const [simIsB2B, setSimIsB2B] = useState<boolean>(true);
   const [simIssRate, setSimIssRate] = useState<number>(0.05);
   const [simActivities, setSimActivities] = useState<{ activity: AppActivity; percentage: number; label: string; cnae?: string }[]>([]);
+  const [simRatRate, setSimRatRate] = useState<number>(0.02);
+  const [simTerceirosRate, setSimTerceirosRate] = useState<number>(0.058);
 
   const formatRawToCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -294,7 +296,7 @@ const App: React.FC = () => {
       const weight = a.percentage / 100;
       return {
         weight,
-        res: calculateTaxEngine(rbt12, mBilling * weight, mPayroll * weight, a.activity, simIsB2B, simIssRate)
+        res: calculateTaxEngine(rbt12, mBilling * weight, mPayroll * weight, a.activity, simIsB2B, simIssRate, simRatRate, simTerceirosRate)
       };
     });
 
@@ -304,6 +306,7 @@ const App: React.FC = () => {
       simples: { ...firstRes.simples, dasTotal: 0 },
       lucroPresumido: { ...firstRes.lucroPresumido, total: 0, irpj: 0, csll: 0, pis: 0, cofins: 0 },
       reforma2026: { ...firstRes.reforma2026, cbs_ibs: 0 },
+      folha: { ...firstRes.folha, inssPatronal: 0, rat: 0, terceiros: 0, totalEncargos: 0 },
       sugestao: firstRes.sugestao
     };
 
@@ -316,7 +319,13 @@ const App: React.FC = () => {
       aggregated.lucroPresumido.issqn += res.lucroPresumido.issqn;
       aggregated.lucroPresumido.total += res.lucroPresumido.total;
       aggregated.reforma2026.cbs_ibs += res.reforma2026.cbs_ibs;
+      aggregated.folha.inssPatronal += res.folha.inssPatronal;
+      aggregated.folha.rat += res.folha.rat;
+      aggregated.folha.terceiros += res.folha.terceiros;
+      aggregated.folha.totalEncargos += res.folha.totalEncargos;
     });
+
+    aggregated.folha.percentualSobreFolha = mPayroll > 0 ? (aggregated.folha.totalEncargos / mPayroll) * 100 : 0;
 
     aggregated.simples.aliquotaEfetiva = mBilling > 0 ? (aggregated.simples.dasTotal / mBilling) * 100 : 0;
     aggregated.lucroPresumido.aliquotaEfetiva = mBilling > 0 ? (aggregated.lucroPresumido.total / mBilling) * 100 : 0;
@@ -372,6 +381,12 @@ const App: React.FC = () => {
                 className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'tax-rules' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Planejador 2026
+              </button>
+              <button
+                onClick={() => setActiveTab('payroll-reflection')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'payroll-reflection' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Reflexo Folha
               </button>
               <button
                 onClick={() => setActiveTab('calculation-memory')}
@@ -1007,7 +1022,33 @@ const App: React.FC = () => {
                         </div>
                       </div>
 
-                      <p className="text-[9px] text-slate-400 font-medium">Configure a alíquota de ISS do seu município para o Lucro Presumido.</p>
+                      <div className="pt-2">
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Alíquota RAT (Folha)</label>
+                          <span className="text-[10px] font-black text-orange-600">{(simRatRate * 100).toFixed(1)}%</span>
+                        </div>
+                        <input
+                          type="range" min="0" max="3" step="0.5"
+                          value={simRatRate * 100}
+                          onChange={(e) => setSimRatRate(Number(e.target.value) / 100)}
+                          className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Outras Entidades (%)</label>
+                          <span className="text-[10px] font-black text-violet-600">{(simTerceirosRate * 100).toFixed(1)}%</span>
+                        </div>
+                        <input
+                          type="range" min="0" max="5.8" step="0.1"
+                          value={simTerceirosRate * 100}
+                          onChange={(e) => setSimTerceirosRate(Number(e.target.value) / 100)}
+                          className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-violet-600"
+                        />
+                      </div>
+
+                      <p className="text-[9px] text-slate-400 font-medium italic">* Impacta apenas Lucro Presumido e Anexo IV.</p>
                     </div>
                   </div>
                 </div>
@@ -1070,6 +1111,14 @@ const App: React.FC = () => {
                           <p className={`text-sm font-black ${taxSimulation.simples.fatorR! >= 28 ? 'text-emerald-600' : 'text-rose-600'}`}>{taxSimulation.simples.fatorR?.toFixed(1)}%</p>
                         </div>
                       </div>
+
+                      <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <Users size={14} className="text-slate-400" />
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reflexo Folha (INSS/RAT)</span>
+                        </div>
+                        <span className="text-[10px] font-black text-emerald-600">INCLUSO NO DAS</span>
+                      </div>
                     </div>
                   </div>
 
@@ -1112,6 +1161,14 @@ const App: React.FC = () => {
                           <p>ISSQN (LP): {(simIssRate * 100).toFixed(1)}%</p>
                           <p>IR/CS: {(taxSimulation.lucroPresumido.aliquotaEfetiva - 3.65 - (simIssRate * 100)).toFixed(2)}%</p>
                         </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <Users size={14} className="text-slate-400" />
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reflexo Folha (Extra)</span>
+                        </div>
+                        <span className="text-[10px] font-black text-rose-600">+{taxSimulation.folha.totalEncargos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                       </div>
                     </div>
                   </div>
@@ -1389,6 +1446,142 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
+        ) : activeTab === 'payroll-reflection' ? (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div className="mb-10 text-center max-w-2xl mx-auto">
+              <h2 className="text-3xl font-extrabold text-slate-800 mb-3 tracking-tight">Reflexo da Folha de Pagamento</h2>
+              <p className="text-slate-500 text-lg">Simulação de encargos patronais (INSS, RAT e Terceiros) para planejamento estratégico.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Controls Column */}
+              <div className="lg:col-span-1 space-y-6">
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
+                  <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
+                    <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
+                    Parâmetros de Folha
+                  </h3>
+
+                  <div className="space-y-8">
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Alíquota RAT (%)</label>
+                        <span className="text-lg font-black text-indigo-600">{(simRatRate * 100).toFixed(1)}%</span>
+                      </div>
+                      <input
+                        type="range" min="0" max="3" step="0.5"
+                        value={simRatRate * 100}
+                        onChange={(e) => setSimRatRate(Number(e.target.value) / 100)}
+                        className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <div className="flex justify-between mt-2 text-[10px] text-slate-400 font-bold">
+                        <span>LEVE (1%)</span>
+                        <span>MÉDIO (2%)</span>
+                        <span>GRAVE (3%)</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Outras Entidades (%)</label>
+                        <span className="text-lg font-black text-violet-600">{(simTerceirosRate * 100).toFixed(2)}%</span>
+                      </div>
+                      <input
+                        type="range" min="0" max="5.8" step="0.1"
+                        value={simTerceirosRate * 100}
+                        onChange={(e) => setSimTerceirosRate(Number(e.target.value) / 100)}
+                        className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-violet-600"
+                      />
+                      <div className="flex justify-between mt-2 text-[10px] text-slate-400 font-bold">
+                        <span>0%</span>
+                        <span>PADRÃO (5.8%)</span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Nota Técnica</p>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                        O **INSS Patronal (20%)** é aplicado automaticamente para empresas no Lucro Presumido ou Simples Anexo IV.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dashboard Column */}
+              <div className="lg:col-span-2 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-slate-900 p-8 rounded-[2rem] text-white shadow-2xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                    <p className="text-indigo-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Carga sobre Folha (LP)</p>
+                    <p className="text-4xl font-black mb-1">{(taxSimulation.folha.percentualSobreFolha).toFixed(2)}%</p>
+                    <p className="text-slate-400 text-xs font-medium">Efeito Cascata: Patronal + RAT + Terceiros</p>
+                  </div>
+                  <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50">
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-2">Desembolso Mensal Extras</p>
+                    <p className="text-4xl font-black text-slate-800 mb-1">{taxSimulation.folha.totalEncargos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <p className="text-slate-500 text-xs font-medium">Custo oculto fora do Simples Geral</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden">
+                  <h3 className="text-xl font-black mb-8 text-slate-800 flex items-center gap-2">
+                    <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div>
+                    Composição Detalhada dos Encargos
+                  </h3>
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center font-black">20%</div>
+                        <div>
+                          <p className="text-sm font-black text-slate-800">INSS Patronal</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Cota Parte Empresa</p>
+                        </div>
+                      </div>
+                      <p className="font-black text-slate-800">{taxSimulation.folha.inssPatronal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center font-black">{(simRatRate * 100).toFixed(0)}%</div>
+                        <div>
+                          <p className="text-sm font-black text-slate-800">RAT (Risco de Acidente)</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Ajustado via Slider</p>
+                        </div>
+                      </div>
+                      <p className="font-black text-slate-800">{taxSimulation.folha.rat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-violet-100 text-violet-600 rounded-xl flex items-center justify-center font-black">{(simTerceirosRate * 100).toFixed(1)}%</div>
+                        <div>
+                          <p className="text-sm font-black text-slate-800">Terceiros (Sesi/Sesc/etc)</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Sistema S e FNDE</p>
+                        </div>
+                      </div>
+                      <p className="font-black text-slate-800">{taxSimulation.folha.terceiros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 p-6 bg-indigo-600 rounded-3xl text-white">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-indigo-200 text-xs font-black uppercase tracking-widest">Total de Encargos Folha</span>
+                      <span className="text-2xl font-black">{taxSimulation.folha.totalEncargos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    </div>
+                    {taxSimulation.folha.isSimplesSubstituido && (
+                      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-indigo-500/50">
+                        <ShieldCheck size={16} className="text-indigo-300" />
+                        <p className="text-[10px] font-bold uppercase tracking-tight text-indigo-100">
+                          Economia: No Simples Nacional (exceto anexo IV), este valor de {(taxSimulation.folha.inssPatronal + taxSimulation.folha.rat).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} já está incluso na guia DAS.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : activeTab === 'report' ? (
           <div className="report-container pb-20">
             <div className="max-w-5xl mx-auto">
@@ -1490,6 +1683,11 @@ const App: React.FC = () => {
                       <td className="text-slate-500">{taxSimulation.lucroPresumido.aliquotaEfetiva.toFixed(2)}%</td>
                       <td className="text-slate-500">{taxSimulation.lucroPresumido.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     </tr>
+                    <tr className="bg-slate-50/50">
+                      <td className="text-slate-400 italic">Reflexo Folha (Encargos LP)</td>
+                      <td className="text-slate-400 font-medium">---</td>
+                      <td className="text-slate-400 font-bold">+{taxSimulation.folha.totalEncargos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    </tr>
                   </tbody>
                 </table>
 
@@ -1514,10 +1712,54 @@ const App: React.FC = () => {
 
                 <hr className="border-slate-100 my-5" />
 
-                {/* 4. Gestão do Fator R - Apenas para Serviços Intelectuais */}
+                {/* 4. Impacto na Folha de Pagamento */}
+                <h2 className="report-section-header">4. Análise de Encargos sobre a Folha (Reflexo)</h2>
+                <p className="report-body-text mb-4">
+                  A estrutura de custos de pessoal é um fator determinante na escolha do regime. Abaixo, detalhamos os encargos patronais ocultos fora do Simples Nacional (Anexo I, II, III e V).
+                </p>
+                <div className="grid grid-cols-2 gap-8 mb-6">
+                  <div className="p-4 bg-slate-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Massa Salarial Base</p>
+                    <p className="text-lg font-black text-slate-800">{(simMonthlyPayroll || statsMetrics.payroll.avg).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                  </div>
+                  <div className="p-4 bg-indigo-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase mb-1">Carga Extra Patronal (LP)</p>
+                    <p className="text-lg font-black text-indigo-600">{taxSimulation.folha.totalEncargos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                  </div>
+                </div>
+                <table className="modern-table mb-8">
+                  <thead>
+                    <tr>
+                      <th>Encargo Patronal</th>
+                      <th>Alíquota</th>
+                      <th>Valor Mensal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>INSS Patronal (Cota Empresa)</td>
+                      <td>20,0%</td>
+                      <td>{taxSimulation.folha.inssPatronal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    </tr>
+                    <tr>
+                      <td>RAT (Risco de Acidente)</td>
+                      <td>{(simRatRate * 100).toFixed(1)}%</td>
+                      <td>{taxSimulation.folha.rat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    </tr>
+                    <tr>
+                      <td>Terceiros (Sistema S)</td>
+                      <td>{(simTerceirosRate * 100).toFixed(2)}%</td>
+                      <td>{taxSimulation.folha.terceiros.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <hr className="border-slate-100 my-5" />
+
+                {/* 5. Gestão do Fator R - Apenas para Serviços Intelectuais */}
                 {simActivity === 'servico_intellectual' && (
                   <div className="mb-12">
-                    <h2 className="report-section-header">4. Análise Crítica: Gestão do Fator R</h2>
+                    <h2 className="report-section-header">5. Análise Crítica: Gestão do Fator R</h2>
                     <div className="mb-8">
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-lg">⚙️</span>
@@ -1537,9 +1779,9 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                {/* 5. Roadmap Estratégico */}
+                {/* 6. Roadmap Estratégico */}
                 <hr className="border-slate-100 my-5" />
-                <h2 className="report-section-header">{simActivity === 'servico_intellectual' ? '5.' : '4.'} Roadmap Estratégico e Próximos Passos</h2>
+                <h2 className="report-section-header">{simActivity === 'servico_intellectual' ? '6.' : '5.'} Roadmap Estratégico e Próximos Passos</h2>
                 <div className="mb-10">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-lg">🛡️</span>

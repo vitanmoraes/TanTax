@@ -31,6 +31,14 @@ export interface TaxResults {
         percentualReducao: number;
         fase: string;
     };
+    folha: {
+        inssPatronal: number;
+        rat: number;
+        terceiros: number;
+        totalEncargos: number;
+        percentualSobreFolha: number;
+        isSimplesSubstituido: boolean;
+    };
     sugestao: string;
 }
 
@@ -68,13 +76,15 @@ export function calculateTaxEngine(
     monthlyPayroll: number,
     activity: 'comercio' | 'industria' | 'servico_geral' | 'servico_intellectual' | 'hospitalar',
     isB2B: boolean,
-    issRate: number = 0.05
+    issRate: number = 0.05,
+    ratRate: number = 0.02,
+    terceirosRate: number = 0.058
 ): TaxResults {
 
     // 1. Lógica Fator R
     const fatorR = rbt12 > 0 ? (monthlyPayroll * 12) / rbt12 : 0; // Aproximação simplificada
     let simplesAnexo = "III";
-    if (activity === 'servico_intellectual') {
+    if (activity === 'servico_intellectual' || activity === 'hospitalar') {
         simplesAnexo = fatorR >= 0.28 ? "III" : "V";
     } else if (activity === 'comercio') {
         simplesAnexo = "I";
@@ -130,7 +140,7 @@ export function calculateTaxEngine(
         sugestao += " (Considere Regime Híbrido para B2B)";
     }
 
-    return {
+    const results: TaxResults = {
         simples: {
             elegivel: rbt12 <= 4800000,
             anexo: simplesAnexo,
@@ -157,6 +167,30 @@ export function calculateTaxEngine(
             percentualReducao: 0, // Placeholder
             fase: "Teste (1%)"
         },
+        folha: {
+            inssPatronal: simplesAnexo === "IV" || lpTotal > 0 ? monthlyPayroll * 0.20 : 0,
+            rat: simplesAnexo === "IV" || lpTotal > 0 ? monthlyPayroll * ratRate : 0,
+            terceiros: lpTotal > 0 ? monthlyPayroll * terceirosRate : 0, // Simples Geral não paga terceiros
+            totalEncargos: 0, // Calculated below
+            percentualSobreFolha: 0,
+            isSimplesSubstituido: simplesAnexo !== "IV"
+        },
         sugestao
     };
+
+    // Ajuste final dos totais de folha
+    const isLP = lpTotal > 0;
+    const isAnexoIV = simplesAnexo === "IV";
+
+    if (isLP) {
+        results.folha.totalEncargos = results.folha.inssPatronal + results.folha.rat + results.folha.terceiros;
+    } else if (isAnexoIV) {
+        results.folha.totalEncargos = results.folha.inssPatronal + results.folha.rat;
+    } else {
+        results.folha.totalEncargos = 0; // Outros anexos do simples o INSS patronal está no DAS
+    }
+
+    results.folha.percentualSobreFolha = monthlyPayroll > 0 ? (results.folha.totalEncargos / monthlyPayroll) * 100 : 0;
+
+    return results;
 }
