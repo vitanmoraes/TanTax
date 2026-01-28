@@ -65,6 +65,7 @@ const App: React.FC = () => {
   const [simRbt12, setSimRbt12] = useState<number>(0);
   const [simMonthlyBilling, setSimMonthlyBilling] = useState<number>(0);
   const [simMonthlyPayroll, setSimMonthlyPayroll] = useState<number>(0);
+  const [simMonthlyProLabore, setSimMonthlyProLabore] = useState<number>(0);
   const [simActivity, setSimActivity] = useState<'comercio' | 'industria' | 'servico_geral' | 'servico_intellectual' | 'hospitalar'>('servico_intellectual');
   const [simIsB2B, setSimIsB2B] = useState<boolean>(true);
   const [simIssRate, setSimIssRate] = useState<number>(0.05);
@@ -214,12 +215,12 @@ const App: React.FC = () => {
   };
 
   const monthlyStats = useMemo((): MonthlyStats[] => {
-    const stats: Record<string, { billing: number; payroll: number; monthName: string; year: number }> = {};
+    const stats: Record<string, { billing: number; salaries: number; proLabore: number; monthName: string; year: number }> = {};
 
     billingRecords.forEach(r => {
       const monthName = normalizeMonthName(r.month);
       const key = `${monthName}/${r.year}`;
-      if (!stats[key]) stats[key] = { billing: 0, payroll: 0, monthName, year: r.year };
+      if (!stats[key]) stats[key] = { billing: 0, salaries: 0, proLabore: 0, monthName, year: r.year };
       stats[key].billing += r.total;
     });
 
@@ -230,25 +231,37 @@ const App: React.FC = () => {
         const year = parseInt(parts[1], 10);
         const monthName = MONTH_NAMES[mIdx] || parts[0];
         const key = `${monthName}/${year}`;
-        if (!stats[key]) stats[key] = { billing: 0, payroll: 0, monthName, year };
-        stats[key].payroll += r.value;
+        if (!stats[key]) stats[key] = { billing: 0, salaries: 0, proLabore: 0, monthName, year };
+
+        if (r.category === 'pro-labore') {
+          stats[key].proLabore += r.value;
+        } else {
+          stats[key].salaries += r.value;
+        }
       }
     });
 
     return Object.values(stats)
-      .map(data => ({
-        month: `${data.monthName}/${data.year}`,
-        billing: data.billing,
-        payroll: data.payroll,
-        fgts: data.payroll * 0.08,
-        factorR: data.billing > 0 ? ((data.payroll * 1.08) / data.billing) * 100 : 0,
-        sortKey: data.year * 100 + (MONTH_NAMES.indexOf(data.monthName) + 1)
-      }))
+      .map(data => {
+        const totalPayroll = data.salaries + data.proLabore;
+        return {
+          month: `${data.monthName}/${data.year}`,
+          billing: data.billing,
+          payroll: totalPayroll,
+          salaries: data.salaries,
+          proLabore: data.proLabore,
+          fgts: data.salaries * 0.08,
+          factorR: data.billing > 0 ? ((data.salaries * 1.08 + data.proLabore) / data.billing) * 100 : 0,
+          sortKey: data.year * 100 + (MONTH_NAMES.indexOf(data.monthName) + 1)
+        };
+      })
       .sort((a, b) => a.sortKey - b.sortKey);
   }, [billingRecords, payrollRecords]);
 
   const totalBilling = billingRecords.reduce((acc, curr) => acc + curr.total, 0);
-  const totalPayroll = payrollRecords.reduce((acc, curr) => acc + curr.value, 0) * 1.08;
+  const totalSalaries = payrollRecords.filter(r => r.category !== 'pro-labore').reduce((acc, curr) => acc + curr.value, 0) * 1.08;
+  const totalProLabore = payrollRecords.filter(r => r.category === 'pro-labore').reduce((acc, curr) => acc + curr.value, 0) * 1.08;
+  const totalPayroll = totalSalaries + totalProLabore;
 
   const accumulatedFactorR = totalBilling > 0 ? (totalPayroll / totalBilling) * 100 : 0;
 
@@ -264,6 +277,9 @@ const App: React.FC = () => {
       return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     };
 
+    const salariesArr = monthlyStats.map(s => s.salaries).filter(v => v > 0);
+    const proLaboreArr = monthlyStats.map(s => s.proLabore).filter(v => v > 0);
+
     return {
       billing: {
         avg: billings.length > 0 ? billings.reduce((a, b) => a + b, 0) / billings.length : 0,
@@ -274,14 +290,25 @@ const App: React.FC = () => {
         avg: payrolls.length > 0 ? payrolls.reduce((a, b) => a + b, 0) / payrolls.length : 0,
         latest: payrolls.length > 0 ? payrolls[payrolls.length - 1] : 0,
         median: calcMedian(payrolls)
+      },
+      salaries: {
+        avg: salariesArr.length > 0 ? salariesArr.reduce((a, b) => a + b, 0) / salariesArr.length : 0,
+        latest: salariesArr.length > 0 ? salariesArr[salariesArr.length - 1] : 0,
+      },
+      proLabore: {
+        avg: proLaboreArr.length > 0 ? proLaboreArr.reduce((a, b) => a + b, 0) / proLaboreArr.length : 0,
+        latest: proLaboreArr.length > 0 ? proLaboreArr[proLaboreArr.length - 1] : 0,
       }
     };
   }, [monthlyStats]);
 
+
   const taxSimulation = useMemo(() => {
     const rbt12 = simRbt12 || totalBilling;
     const mBilling = simMonthlyBilling || (totalBilling / 12) || 0;
-    const mPayroll = simMonthlyPayroll || (totalPayroll / 12) || 0;
+    const mProLabore = simMonthlyProLabore || statsMetrics.proLabore.avg || 0;
+    const mSalaries = simMonthlyPayroll || statsMetrics.salaries.avg || 0;
+    const mPayroll = mSalaries + mProLabore;
 
     // Use simActivities if defined, otherwise fallback to simActivity
     const activeActivities = simActivities.length > 0
@@ -289,17 +316,16 @@ const App: React.FC = () => {
       : [{ activity: simActivity, percentage: 100, label: 'Geral' }];
 
     if (activeActivities.length === 0) {
-      return calculateTaxEngine(rbt12, mBilling, mPayroll, simActivity, simIsB2B);
+      return calculateTaxEngine(rbt12, mBilling, mPayroll, simActivity, simIsB2B, simIssRate, simRatRate, simTerceirosRate, mProLabore);
     }
 
     const results = activeActivities.map(a => {
       const weight = a.percentage / 100;
       return {
         weight,
-        res: calculateTaxEngine(rbt12, mBilling * weight, mPayroll * weight, a.activity, simIsB2B, simIssRate, simRatRate, simTerceirosRate)
+        res: calculateTaxEngine(rbt12, mBilling * weight, mPayroll * weight, a.activity, simIsB2B, simIssRate, simRatRate, simTerceirosRate, mProLabore * weight)
       };
     });
-
     // Aggregate results
     const firstRes = results[0].res;
     const aggregated: TaxResults = {
@@ -336,7 +362,7 @@ const App: React.FC = () => {
       : "Simples Nacional";
 
     return aggregated;
-  }, [simRbt12, simMonthlyBilling, simMonthlyPayroll, simActivity, simIsB2B, totalBilling, totalPayroll, simActivities]);
+  }, [simRbt12, simMonthlyBilling, simMonthlyPayroll, simMonthlyProLabore, simActivity, simIsB2B, totalBilling, totalPayroll, simActivities, simIssRate, simRatRate, simTerceirosRate, statsMetrics.proLabore.avg]);
 
   if (loading) {
     return (
@@ -540,7 +566,7 @@ const App: React.FC = () => {
                     label="Folha Acumulada"
                     value={totalPayroll.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     icon={<Users className="text-violet-600" />}
-                    subtext="Total dos 12 meses"
+                    subtext={`S: ${totalSalaries.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} | PL: ${totalProLabore.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`}
                     color="bg-violet-50"
                   />
                   <KpiCard
@@ -579,7 +605,9 @@ const App: React.FC = () => {
                           />
                           <Legend verticalAlign="top" align="right" height={40} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b' }} />
                           <Area type="monotone" dataKey="billing" name="Faturamento" fill="#818cf8" stroke="#4f46e5" strokeWidth={3} fillOpacity={0.1} />
-                          <Bar dataKey={(s) => s.payroll + s.fgts} name="Folha + FGTS" fill="#ec4899" radius={[6, 6, 0, 0]} barSize={24} />
+                          <Bar dataKey="salaries" name="Salários" stackId="a" fill="#ec4899" barSize={24} />
+                          <Bar dataKey="proLabore" name="Pró-Labore" stackId="a" fill="#be185d" barSize={24} />
+                          <Bar dataKey="fgts" name="FGTS" stackId="a" fill="#fbcfe8" radius={[6, 6, 0, 0]} barSize={24} />
                         </ComposedChart>
                       </ResponsiveContainer>
                     </div>
@@ -631,9 +659,11 @@ const App: React.FC = () => {
                         <tr className="bg-slate-50/50 text-slate-400 text-[10px] uppercase tracking-[0.2em] font-black">
                           <th className="px-8 py-5">Período</th>
                           <th className="px-8 py-5">Faturamento (A)</th>
-                          <th className="px-8 py-5">Folha Pagto (B)</th>
+                          <th className="px-8 py-5 text-pink-600">Salários</th>
+                          <th className="px-8 py-5 text-rose-700">Pró-Labore</th>
+                          <th className="px-8 py-5">Folha Total (B)</th>
                           <th className="px-8 py-5">FGTS (8%)</th>
-                          <th className="px-8 py-5">Fator R ((B+FGTS)/A)</th>
+                          <th className="px-8 py-5">Fator R</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -643,11 +673,17 @@ const App: React.FC = () => {
                             <td className="px-8 py-6 text-slate-500 font-medium">
                               {stat.billing.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
-                            <td className="px-8 py-6 text-slate-500 font-medium">
+                            <td className="px-8 py-6 text-pink-600/70 font-bold">
+                              {stat.salaries.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                            <td className="px-8 py-6 text-rose-700/70 font-bold">
+                              {stat.proLabore.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                            <td className="px-8 py-6 text-slate-500 font-black">
                               {stat.payroll.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-8 py-6 text-slate-500 font-medium">
-                              {(stat.payroll * 0.08).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {stat.fgts.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-8 py-6">
                               <span className={`text-sm font-black px-3 py-1 rounded-lg ${stat.factorR >= 28 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'}`}>
@@ -976,18 +1012,33 @@ const App: React.FC = () => {
 
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Média Folha + Pró-Labore</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Média Salários (CLT)</label>
                         <div className="flex gap-1">
-                          <button onClick={() => setSimMonthlyPayroll(Math.round(statsMetrics.payroll.avg))} className="px-2 py-0.5 text-[8px] font-black bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 rounded-md transition-colors uppercase">Média</button>
-                          <button onClick={() => setSimMonthlyPayroll(Math.round(statsMetrics.payroll.latest))} className="px-2 py-0.5 text-[8px] font-black bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 rounded-md transition-colors uppercase">Último</button>
-                          <button onClick={() => setSimMonthlyPayroll(Math.round(statsMetrics.payroll.median))} className="px-2 py-0.5 text-[8px] font-black bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 rounded-md transition-colors uppercase">Mediana</button>
+                          <button onClick={() => setSimMonthlyPayroll(Math.round(statsMetrics.salaries.avg))} className="px-2 py-0.5 text-[8px] font-black bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 rounded-md transition-colors uppercase">Média</button>
+                          <button onClick={() => setSimMonthlyPayroll(Math.round(statsMetrics.salaries.latest))} className="px-2 py-0.5 text-[8px] font-black bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 rounded-md transition-colors uppercase">Último</button>
                         </div>
                       </div>
                       <input
                         type="text"
-                        value={formatRawToCurrency(simMonthlyPayroll || statsMetrics.payroll.avg)}
+                        value={formatRawToCurrency(simMonthlyPayroll || statsMetrics.salaries.avg)}
                         onChange={(e) => setSimMonthlyPayroll(parseCurrencyToNumber(e.target.value))}
                         className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 transition-all outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Valor do Pró-Labore</label>
+                        <div className="flex gap-1">
+                          <button onClick={() => setSimMonthlyProLabore(Math.round(statsMetrics.proLabore.avg))} className="px-2 py-0.5 text-[8px] font-black bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 rounded-md transition-colors uppercase">Média</button>
+                          <button onClick={() => setSimMonthlyProLabore(Math.round(statsMetrics.proLabore.latest))} className="px-2 py-0.5 text-[8px] font-black bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 rounded-md transition-colors uppercase">Último</button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={formatRawToCurrency(simMonthlyProLabore || statsMetrics.proLabore.avg)}
+                        onChange={(e) => setSimMonthlyProLabore(parseCurrencyToNumber(e.target.value))}
+                        className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-rose-500 transition-all outline-none"
                       />
                     </div>
 
@@ -1717,16 +1768,23 @@ const App: React.FC = () => {
                 <p className="report-body-text mb-4">
                   A estrutura de custos de pessoal é um fator determinante na escolha do regime. Abaixo, detalhamos os encargos patronais ocultos fora do Simples Nacional (Anexo I, II, III e V).
                 </p>
-                <div className="grid grid-cols-2 gap-8 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                   <div className="p-4 bg-slate-50 rounded-2xl">
-                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Massa Salarial Base</p>
-                    <p className="text-lg font-black text-slate-800">{(simMonthlyPayroll || statsMetrics.payroll.avg).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Total Salários</p>
+                    <p className="text-lg font-black text-slate-800">{statsMetrics.salaries.avg.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Total Pró-Labore</p>
+                    <p className="text-lg font-black text-slate-800">{statsMetrics.proLabore.avg.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                   </div>
                   <div className="p-4 bg-indigo-50 rounded-2xl">
                     <p className="text-[10px] font-black text-indigo-400 uppercase mb-1">Carga Extra Patronal (LP)</p>
                     <p className="text-lg font-black text-indigo-600">{taxSimulation.folha.totalEncargos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                   </div>
                 </div>
+                <p className="text-[9px] text-slate-400 font-bold mb-6 italic">
+                  * Nota Técnica: O INSS Patronal (20%) incide sobre a massa total. RAT e Outras Entidades incidem exclusivamente sobre o Total de Salários (CLT).
+                </p>
                 <table className="modern-table mb-8">
                   <thead>
                     <tr>

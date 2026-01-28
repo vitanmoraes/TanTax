@@ -7,7 +7,8 @@ export interface BillingRecord {
 }
 
 export interface PayrollRecord {
-  type: string;
+  type: string; // 'Empregador Mensal', 'Folha Mensal', etc.
+  category: 'pro-labore' | 'salario';
   competence: string; // MM/YYYY
   value: number;
 }
@@ -22,6 +23,9 @@ export interface ExtractionResult {
 export interface MonthlyStats {
   month: string;
   billing: number;
-  payroll: number;
+  payroll: number; // Total (Salarios + Pro-Labore)
+  salaries: number;
+  proLabore: number;
+  fgts: number;
   factorR: number;
 }

@@ -37,10 +37,11 @@ const payrollSchema = {
         type: Type.OBJECT,
         properties: {
           type: { type: Type.STRING },
+          category: { type: Type.STRING },
           competence: { type: Type.STRING },
           value: { type: Type.NUMBER },
         },
-        required: ["type", "competence", "value"],
+        required: ["type", "category", "competence", "value"],
       },
     },
   },
@@ -76,7 +77,7 @@ export async function extractPayrollData(file: FileData): Promise<{ companyName:
     contents: {
       parts: [
         { inlineData: { data: file.base64, mimeType: file.mimeType } },
-        { text: "Extraia todos os dados de pagamento de folha deste documento PDF/Imagem. Capture o tipo de cálculo (ex: Folha Mensal, Empregador Mensal, Férias), a competência (MM/YYYY) e o valor. Converta valores monetários para números." }
+        { text: "Extraia todos os dados de pagamento de folha deste documento PDF/Imagem. Categorize cada registro: se o tipo de cálculo for 'Empregador Mensal', a categoria é 'pro-labore'; para qualquer outro tipo (como 'Folha Mensal', 'Férias', etc), a categoria é 'salario'. Capture o tipo, a categoria, a competência (MM/YYYY) e o valor. Converta valores monetários para números." }
       ]
     },
     config: {

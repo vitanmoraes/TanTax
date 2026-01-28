@@ -73,16 +73,20 @@ const SIMPLES_TABLE = {
 export function calculateTaxEngine(
     rbt12: number,
     monthlyBilling: number,
-    monthlyPayroll: number,
+    monthlyPayroll: number, // Total (Salarios + Pro-Labore)
     activity: 'comercio' | 'industria' | 'servico_geral' | 'servico_intellectual' | 'hospitalar',
     isB2B: boolean,
     issRate: number = 0.05,
     ratRate: number = 0.02,
-    terceirosRate: number = 0.058
+    terceirosRate: number = 0.058,
+    monthlyProLabore: number = 0
 ): TaxResults {
 
     // 1. Lógica Fator R
-    const fatorR = rbt12 > 0 ? (monthlyPayroll * 12) / rbt12 : 0; // Aproximação simplificada
+    const monthlySalaries = Math.max(0, monthlyPayroll - monthlyProLabore);
+    const massaSalarialComFGTS = (monthlySalaries * 1.08) + monthlyProLabore;
+    const fatorR = rbt12 > 0 ? (massaSalarialComFGTS * 12) / rbt12 : 0;
+
     let simplesAnexo = "III";
     if (activity === 'servico_intellectual' || activity === 'hospitalar') {
         simplesAnexo = fatorR >= 0.28 ? "III" : "V";
@@ -169,8 +173,8 @@ export function calculateTaxEngine(
         },
         folha: {
             inssPatronal: simplesAnexo === "IV" || lpTotal > 0 ? monthlyPayroll * 0.20 : 0,
-            rat: simplesAnexo === "IV" || lpTotal > 0 ? monthlyPayroll * ratRate : 0,
-            terceiros: lpTotal > 0 ? monthlyPayroll * terceirosRate : 0, // Simples Geral não paga terceiros
+            rat: simplesAnexo === "IV" || lpTotal > 0 ? monthlySalaries * ratRate : 0,
+            terceiros: lpTotal > 0 ? monthlySalaries * terceirosRate : 0, // Simples Geral não paga terceiros
             totalEncargos: 0, // Calculated below
             percentualSobreFolha: 0,
             isSimplesSubstituido: simplesAnexo !== "IV"
