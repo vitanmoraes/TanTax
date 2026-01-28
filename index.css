@@ -1,0 +1,332 @@
+/* TanTax Modern Executive Report Styles (Light Theme) */
+
+@media screen {
+    .report-container {
+        background-color: #f8fafc;
+        min-height: 100vh;
+        padding: 40px 20px;
+    }
+
+    .a4-page {
+        background: white;
+        width: 210mm;
+        min-height: 297mm;
+        padding: 20mm;
+        margin: 0 auto;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.05);
+        font-family: 'Inter', sans-serif;
+        color: #18181b;
+        line-height: 1.6;
+    }
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 20mm 15mm;
+    }
+
+    /* Reset background and layout for print */
+    html,
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100%;
+        height: auto;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    .no-print,
+    button,
+    nav,
+    header:not(.print-header),
+    aside,
+    [role="button"],
+    .fixed,
+    .absolute {
+        display: none !important;
+    }
+
+    /* Force the report container to be the only thing visible */
+    .report-container {
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        height: auto !important;
+    }
+
+    .a4-page,
+    .print-area {
+        width: 100% !important;
+        max-width: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        display: block !important;
+        border: none !important;
+        font-family: 'Inter', system-ui, sans-serif !important;
+    }
+
+
+    /* Page Break Management */
+    h2.report-section-header {
+        break-before: auto;
+        break-after: avoid;
+        margin-top: 1.5rem !important;
+        /* Smaller margin for print */
+    }
+
+    .recommendation-box,
+    .modern-table,
+    .formula-container,
+    .roadmap-step,
+    .page-break+*,
+    footer {
+        break-inside: avoid;
+    }
+
+    /* Let elements keep their original colors */
+    hr {
+        border-bottom: 1px solid #eee !important;
+        margin: 1rem 0 !important;
+    }
+
+    .watermark {
+        opacity: 0.1 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}
+
+/* Internal Layout Structure */
+.report-header {
+    border-bottom: 2px solid #18181b;
+    padding-bottom: 1rem;
+    margin-bottom: 2rem;
+}
+
+.report-header h1 {
+    line-height: 1.1;
+}
+
+.report-subtitle {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #52525b;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+}
+
+.report-section-header {
+    font-size: 14pt;
+    font-weight: 800;
+    color: #18181b;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: 1.2;
+}
+
+.report-section-header:first-of-type {
+    margin-top: 1rem;
+}
+
+.report-body-text {
+    font-size: 11pt;
+    color: #3f3f46;
+    margin-bottom: 1rem;
+    line-height: 1.2;
+}
+
+/* Recommendation Box */
+.recommendation-box {
+    background: #ffffff;
+    border: 2px solid #e4e4e7;
+    border-radius: 1rem;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.recommendation-title {
+    font-weight: 800;
+    font-size: 13pt;
+    color: #18181b;
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+}
+
+.economy-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 1rem;
+}
+
+.economy-item {
+    font-weight: 700;
+    font-size: 12pt;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Comparison Table */
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+}
+
+.modern-table th {
+    text-align: left;
+    color: #71717a;
+    font-size: 9pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.75rem 2rem;
+    border-bottom: 1px solid #e4e4e7;
+}
+
+.modern-table th:first-child,
+.modern-table td:first-child {
+    padding-left: 0;
+}
+
+.modern-table th:last-child,
+.modern-table td:last-child {
+    padding-right: 0;
+    text-align: right;
+}
+
+.modern-table td {
+    padding: 0.75rem 2rem;
+    font-size: 11pt;
+    font-weight: 700;
+    border-bottom: 1px solid #f4f4f5;
+}
+
+/* Formula Focal Point */
+.formula-container {
+    padding: 1.5rem;
+    text-align: center;
+    margin: 1.5rem 0;
+}
+
+.formula-display {
+    font-size: 18pt;
+    font-family: 'Times New Roman', serif;
+    font-weight: 500;
+    font-style: italic;
+    margin-bottom: 2rem;
+    color: #18181b;
+}
+
+/* Roadmap List */
+.roadmap-step {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+    position: relative;
+}
+
+.roadmap-step::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    font-weight: 900;
+}
+
+.roadmap-label {
+    font-weight: 800;
+    color: #18181b;
+}
+
+.page-break {
+    display: none;
+    /* Hidden on screen */
+}
+
+@media print {
+    .page-break {
+        display: block !important;
+        page-break-before: always;
+        break-before: page;
+        height: 0;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Prevent huge gaps at the bottom of pages */
+    .report-body-text {
+        margin-bottom: 1.5rem !important;
+    }
+
+    /* Make hr less prominent in print to save space */
+    hr {
+        margin: 1.5rem 0 !important;
+        opacity: 0.3;
+    }
+}
+
+/* Signature & Watermark Support */
+.report-footer-signature {
+    margin-top: 3rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    page-break-inside: avoid;
+}
+
+.signature-line {
+    width: 250px;
+    border-top: 1px solid #18181b;
+    margin-bottom: 1rem;
+}
+
+.signature-name {
+    font-size: 13pt;
+    font-weight: 900;
+    color: #18181b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.signature-title {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+}
+
+.signature-contact {
+    font-size: 9pt;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 0;
+}
+
+.a4-page {
+    position: relative;
+    overflow: hidden;
+}
+
+.watermark-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 6rem;
+    font-weight: 900;
+    color: rgba(0, 0, 0, 0.025);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 0;
+    text-transform: uppercase;
+    user-select: none;
+}

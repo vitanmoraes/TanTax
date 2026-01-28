@@ -1,0 +1,7 @@
+{
+  "name": "TanTax - Extrator Contábil",
+  "description": "Uma plataforma inteligente para extração e análise de faturamento e folha de pagamento de arquivos PDF, automatizando o cálculo do Fator R e insights financeiros.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
